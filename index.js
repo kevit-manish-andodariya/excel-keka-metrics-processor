@@ -147,8 +147,10 @@ function calculateTeamIssueMetrics(filter) {
         return matchesMonth && matchesTeam && reportedDate; // Exclude invalid rows
     });
 
+    console.log({filteredData})
+
     if (filteredData.length === 0) {
-        return `No data found for Month: ${filter.month || 'Any'}, Team: ${filter.team || 'Any'}.`;
+        return `No data found for Month: ${filter.month || 'All'}, Team: ${filter.team || 'Any'}.`;
     }
 
     const totalIssues = filteredData.length;
@@ -210,10 +212,9 @@ function getCurrentMonth() {
 }
 
 function createFilter(options = {}) {
-    const { month = getCurrentMonth(), projectName = 'Syngenta Planting', person, team } = options;
+    const { month = getCurrentMonth() , person, team } = options;
     return {
         month,
-        projectName,
         person,
         team
     };
@@ -231,14 +232,37 @@ function calculateMetrics(persons, filterOptions) {
         console.log(`On-Time Delivery || `, onTimeDelivery);
     });
 
-    const averageCoverage = calculateAverageCodeCoverage({ ...defaultFilter });
+    const averageCoverage = calculateAverageCodeCoverage({ ...defaultFilter, projectName: "Flowtribe" });
     console.log('Average Code Coverage || ', averageCoverage);
 
-    const prodIssueMetrics = calculateTeamIssueMetrics({ ...defaultFilter, team: filterOptions.projectName });
+    const prodIssueMetrics = calculateTeamIssueMetrics({ ...defaultFilter, team: "Flowtribe" });
     console.log('Production Issue Metrics || ', prodIssueMetrics);
 }
 
-const persons = ['Manish', 'Yuvraj', 'Gungun'];
-const filterOptions = { month: 'November', projectName: 'Syngenta Planting' };
+// const persons = ['Manish', 'Yuvraj', 'Gungun'];
+
+const persons = [
+    'Devansh Kaneriya',
+    'Priya Lakhani',
+    'Arjun Parmar',
+    'Nidhi Kathrotiya',
+    'Ronak Jagani',
+    'Sagar Dhanwani',
+    'Siddh Kothari',
+    'Keval Mehta',
+    'Mayank Parmar',
+    'Vishal Parmar',
+    'Ashish Chandpa',
+    'Riya Sata',
+    'Maurya Valambhiya',
+    'Dhruva Pambhar',
+    'Megha Rana',
+    'Rishit Rajpara',
+    'Nirali Sakdecha',
+    'Riddhi Parmar',
+    'Sagar Nakum'
+];
+const filterOptions = { month: 'November' };
+
 
 calculateMetrics(persons, filterOptions);
