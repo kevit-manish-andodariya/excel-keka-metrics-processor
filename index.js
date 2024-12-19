@@ -1,268 +1,242 @@
 const xlsx = require('xlsx');
 const path = require('path');
 
-
 function readExcel(filePath, sheetName) {
-    const workbook = xlsx.readFile(filePath);
-    const worksheet = workbook.Sheets[sheetName];
-    return xlsx.utils.sheet_to_json(worksheet);
+    try {
+        const workbook = xlsx.readFile(filePath);
+        const worksheet = workbook.Sheets[sheetName];
+        return xlsx.utils.sheet_to_json(worksheet);
+    } catch (error) {
+        console.error(`Error reading Excel file: ${filePath}, Sheet: ${sheetName}`, error.message);
+        return [];
+    }
+}
+
+function parseExcelDate(value) {
+    if (value instanceof Date) return value;
+    if (!isNaN(value)) return new Date((value - 25569) * 86400000); // Convert Excel serial date to JS Date
+    if (typeof value === 'string' && !isNaN(Date.parse(value))) return new Date(value);
+    return null;
+}
+
+function noDataMessage(filter, dataFor) {
+    return `Month: ${filter.month || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | Data for ${dataFor} : N/A.`;
 }
 
 function calculateDeliveryQuality(filter) {
-    const filePath = path.join(__dirname, 'DC-1.1 - Delivery Quality.xlsx'); // Input Excel file
-    const sheetName = 'Sheet1';
-    const data = readExcel(filePath, sheetName);
+    try {
+        const filePath = path.join(__dirname, 'DC-1.1 - Delivery Quality.xlsx');
+        const data = readExcel(filePath, 'Sheet1');
 
-    const filteredData = data.filter((row) => {
-        const matchesMonth = filter.month ? row.Month?.toLowerCase() === filter.month.toLowerCase() : true;
-        const matchesProject = filter.projectName ? row['Project Name']?.toLowerCase() === filter.projectName.toLowerCase() : true;
-        const matchesPerson = filter.person ? row['Delivery owner']?.toLowerCase().includes(filter.person.toLowerCase()) : true;
-        return matchesMonth && matchesProject && matchesPerson;
-    });
+        const filteredData = data.filter((row) => {
+            const matchesMonth = filter.month ? row.Month?.toLowerCase() === filter.month.toLowerCase() : true;
+            const matchesProject = filter.projectName ? row['Project Name']?.toLowerCase() === filter.projectName.toLowerCase() : true;
+            const matchesPerson = filter.person ? row['Delivery owner']?.toLowerCase().includes(filter.person.toLowerCase()) : true;
+            return matchesMonth && matchesProject && matchesPerson;
+        });
 
-    if (filteredData.length === 0) {
-        return `No data found for Month: ${filter.month || 'Any'}, Project: ${filter.projectName || 'Any'}, Person: ${filter.person || 'Any'}.`;
+        if (!filteredData.length) return noDataMessage(filter, "Delivery Quality");
+
+        const { totalTestCases, totalPassedTests } = filteredData.reduce(
+            (acc, entry) => {
+                acc.totalTestCases += entry['Total Test Cases'] || 0;
+                acc.totalPassedTests += entry['Tests Passed'] || 0;
+                return acc;
+            },
+            { totalTestCases: 0, totalPassedTests: 0 }
+        );
+
+        const percentage = totalTestCases > 0 ? ((totalPassedTests / totalTestCases) * 100).toFixed(2) : 0;
+        return `Month: ${filter.month || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | Delivery Quality Percentage: ${percentage}%.`;
+    } catch (error) {
+        console.error('Error in calculateDeliveryQuality:', error.message);
+        return 'An error occurred while calculating Delivery Quality.';
     }
-
-    let totalTestCases = 0;
-    let totalPassedTests = 0;
-
-    filteredData.forEach((entry) => {
-        totalTestCases += entry['Total Test Cases'] || 0;
-        totalPassedTests += entry['Tests Passed'] || 0;
-    });
-
-    const percentage = totalTestCases > 0 ? ((totalPassedTests / totalTestCases) * 100).toFixed(2) : 0;
-
-    return `${filter.month || 'Overall'} Delivery Quality Percentage for Project: "${filter.projectName || 'All'}", Person: "${filter.person || 'All'}" is ${percentage}%.`;
 }
 
 function calculateOnTimeDelivery(filter) {
-    const filePath = path.join(__dirname, 'DC-2.1 - On Time Delivery.xlsx'); // Input Excel file
-    const sheetName = 'Data';
-    const data = readExcel(filePath, sheetName);
+    try {
+        const filePath = path.join(__dirname, 'DC-2.1 - On Time Delivery.xlsx');
+        const data = readExcel(filePath, 'Data');
 
-    const filteredData = data.filter((row) => {
-        const matchesMonth = filter.month ? row.Month?.toLowerCase() === filter.month.toLowerCase() : true;
-        const matchesProject = filter.projectName ? row['Project Name']?.toLowerCase() === filter.projectName.toLowerCase() : true;
-        const matchesPerson = filter.person ? row['Delivery Owner']?.toLowerCase().includes(filter.person.toLowerCase()) : true;
-        return matchesMonth && matchesProject && matchesPerson;
-    });
+        const filteredData = data.filter((row) => {
+            const matchesMonth = filter.month ? row.Month?.toLowerCase() === filter.month.toLowerCase() : true;
+            const matchesProject = filter.projectName ? row['Project Name']?.toLowerCase() === filter.projectName.toLowerCase() : true;
+            const matchesPerson = filter.person ? row['Delivery Owner']?.toLowerCase().includes(filter.person.toLowerCase()) : true;
+            return matchesMonth && matchesProject && matchesPerson;
+        });
 
-    if (filteredData.length === 0) {
-        return `No data found for Month: ${filter.month || 'Any'}, Project: ${filter.projectName || 'Any'}, Person: ${filter.person || 'Any'}.`;
+        if (!filteredData.length) return noDataMessage(filter, "On-Time Delivery");
+
+        const { totalDeliveries, onTimeDeliveries } = filteredData.reduce(
+            (acc, entry) => {
+                acc.totalDeliveries++;
+                const scheduledDate = parseExcelDate(entry['Scheduled Delivery Date']);
+                const actualDate = parseExcelDate(entry['Actual Delivery Date']);
+                if (scheduledDate && actualDate && actualDate <= scheduledDate) {
+                    acc.onTimeDeliveries++;
+                }
+                return acc;
+            },
+            { totalDeliveries: 0, onTimeDeliveries: 0 }
+        );
+
+        const percentage = totalDeliveries > 0 ? ((onTimeDeliveries / totalDeliveries) * 100).toFixed(2) : 0;
+        return `Month: ${filter.month || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | Delivery Quality Percentage: ${percentage}%.On-Time Delivery Percentage: ${percentage}%.`;
+    } catch (error) {
+        console.error('Error in calculateOnTimeDelivery:', error.message);
+        return 'An error occurred while calculating On-Time Delivery.';
     }
-
-    let totalDeliveries = 0;
-    let onTimeDeliveries = 0;
-
-    filteredData.forEach((entry) => {
-        totalDeliveries += 1;
-
-        // Convert the Excel serial date values to JavaScript Date objects
-        const scheduledDate = entry['Scheduled Delivery Date'];
-        const actualDate = entry['Actual Delivery Date'];
-
-        // Excel serial date starts from 1900-01-01, so we need to adjust accordingly
-        const jsScheduledDate = new Date((scheduledDate - 25569) * 86400 * 1000);
-        const jsActualDate = new Date((actualDate - 25569) * 86400 * 1000);
-
-        // Check if the actual delivery date is on or before the scheduled date
-        const isOnTime = jsActualDate <= jsScheduledDate;
-
-        // If delivery is on time, increment the counter
-        if (isOnTime) {
-            onTimeDeliveries += 1;
-        }
-    });
-
-    const percentage = totalDeliveries > 0 ? ((onTimeDeliveries / totalDeliveries) * 100).toFixed(2) : 0;
-
-    return `${filter.month || 'Overall'} On-Time Delivery Percentage for Project: "${filter.projectName || 'All'}", Person: "${filter.person || 'All'}" is ${percentage}%.`;
 }
 
 function calculateAverageCodeCoverage(filter) {
-    const filePath = path.join(__dirname, 'DC-1.3 - Code Coverage.xlsx'); // Input Excel file
-    const sheetName = 'Maintaining Coverage';
-    const data = readExcel(filePath, sheetName);
+    try {
+        const filePath = path.join(__dirname, 'DC-1.3 - Code Coverage.xlsx');
+        const data = readExcel(filePath, 'Maintaining Coverage');
 
-    const filteredData = data.filter((row) => {
-        const matchesMonth = filter.month ? row.Month?.toLowerCase() === filter.month.toLowerCase() : true;
-        const matchesProject = filter.projectName ? row['Project Name']?.toLowerCase() === filter.projectName.toLowerCase() : true;
-        return matchesMonth && matchesProject;
-    });
+        const filteredData = data.filter((row) => {
+            const matchesMonth = filter.month ? row.Month?.toLowerCase() === filter.month.toLowerCase() : true;
+            const matchesProject = filter.projectName ? row['Project Name']?.toLowerCase() === filter.projectName.toLowerCase() : true;
+            return matchesMonth && matchesProject;
+        });
 
-    if (filteredData.length === 0) {
-        return `No data found for Month: ${filter.month || 'Any'}, Project: ${filter.projectName || 'Any'}, Repo: ${filter.repo || 'Any'}.`;
+        if (!filteredData.length) return noDataMessage(filter, "Average Code Coverage");
+
+        const { totalCoverage, count } = filteredData.reduce(
+            (acc, entry) => {
+                const coverage = entry['Code Coverage'];
+                if (coverage !== 'N/A' && !isNaN(coverage)) {
+                    acc.totalCoverage += coverage * 100;
+                    acc.count++;
+                }
+                return acc;
+            },
+            { totalCoverage: 0, count: 0 }
+        );
+
+        const averageCoverage = count > 0 ? (totalCoverage / count).toFixed(2) : 0;
+        return `Month: ${filter.month || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | Average Code Coverage: ${averageCoverage}%.`;
+    } catch (error) {
+        console.error('Error in calculateAverageCodeCoverage:', error.message);
+        return 'An error occurred while calculating Code Coverage.';
     }
-
-    let totalCoverage = 0;
-    let count = 0;
-
-    filteredData.forEach((entry) => {
-        const coverage = entry['Code Coverage'];
-        if (coverage !== 'N/A' && !isNaN(coverage)) {
-            totalCoverage += coverage * 100;
-            count += 1;
-        }
-    });
-
-    const averageCoverage = count > 0 ? (totalCoverage / count).toFixed(2) : 0;
-
-    return `${filter.month || 'Overall'} Average Code Coverage for Project: "${filter.projectName || 'All'}", Repo: "${filter.repo || 'All'}" is ${averageCoverage}%.`;
 }
 
 function calculateTeamIssueMetrics(filter) {
     const filePath = path.join(__dirname, 'DC-3.1 High Priority Production Issues.xlsx'); // Input Excel file
     const sheetName = 'Data Collection';
-    const data = readExcel(filePath, sheetName); // Reading the Excel file
 
-    const parseExcelDate = (value) => {
-        // Check if it's already a date object
-        if (value instanceof Date) {
-            return value;
-        }
+    try {
+        const data = readExcel(filePath, sheetName); // Read Excel file
 
-        // If it's a valid serial date (number), convert it to a JS Date
-        if (!isNaN(value)) {
-            return new Date((value - 25569) * 86400000); // Excel serial date to JS Date
-        }
+        // Helper: Parse Excel date
+        const parseExcelDate = (value) => {
+            try {
+                if (value instanceof Date) return value;
+                if (!isNaN(value)) return new Date((value - 25569) * 86400000); // Excel serial date to JS Date
+                if (typeof value === 'string' && !isNaN(Date.parse(value))) return new Date(value);
+            } catch (error) {
+                console.warn(`Failed to parse date: ${value}`);
+            }
+            return null; // Return null if invalid
+        };
 
-        // If it's a string that looks like a date, convert it to JS Date
-        if (typeof value === 'string' && !isNaN(Date.parse(value))) {
-            return new Date(value);
-        }
+        // Helper: Filter data based on month and team
+        const filteredData = data.filter((row) => {
+            const reportedDate = parseExcelDate(row['Reported Time']);
+            const matchesMonth = filter.month && reportedDate
+                ? reportedDate.toLocaleString('en-US', { month: 'long' }).toLowerCase() === filter.month.toLowerCase()
+                : true;
+            const matchesTeam = filter.team
+                ? row['Team Name']?.toLowerCase() === filter.team.toLowerCase()
+                : true;
+            return matchesMonth && matchesTeam && reportedDate; // Exclude invalid rows
+        });
 
-        return null; // Return null if invalid
-    };
+        if (filteredData.length === 0) return noDataMessage(filter, "High priority Production Issues")
 
-    const filteredData = data.filter((row) => {
-        const reportedDate = parseExcelDate(row['Reported Time']);
-        const matchesMonth = filter.month && reportedDate
-            ? reportedDate.toLocaleString('en-US', { month: 'long' }).toLowerCase() === filter.month.toLowerCase()
-            : true;
-        const matchesTeam = filter.team
-            ? row['Team Name']?.toLowerCase() === filter.team.toLowerCase()
-            : true;
-        return matchesMonth && matchesTeam && reportedDate; // Exclude invalid rows
-    });
+        // Helper: Calculate on-time issues
+        const onTimeIssues = filteredData.filter((row) => row['On Time Answer( Yes / No)']?.toLowerCase() === 'yes').length;
 
-    console.log({filteredData})
+        // Helper: Calculate average times
+        const calculateAverageTime = (startField, endField) => {
+            let totalTime = 0;
+            let count = 0;
 
-    if (filteredData.length === 0) {
-        return `No data found for Month: ${filter.month || 'All'}, Team: ${filter.team || 'Any'}.`;
+            filteredData.forEach((row) => {
+                const startTime = parseExcelDate(row[startField]);
+                const endTime = parseExcelDate(row[endField]);
+                if (startTime && endTime) {
+                    const timeDiffMillis = endTime - startTime;
+                    const timeDiffHours = timeDiffMillis / 3600000; // Difference in hours
+                    totalTime += timeDiffHours;
+                    count++;
+                }
+            });
+
+            const averageTimeHours = count > 0 ? (totalTime / count).toFixed(2) : 'N/A';
+            const averageTimeMinutes = count > 0 ? ((totalTime / count) * 60).toFixed(2) : 'N/A';
+
+            return { hours: averageTimeHours, minutes: averageTimeMinutes };
+        };
+
+        // Metrics calculation
+        const totalIssues = filteredData.length;
+        const avgAcknowledgmentTime = calculateAverageTime('Reported Time', 'Initial Acknowledgment Time');
+        const avgResolutionTime = calculateAverageTime('Reported Time', 'Resolution Time');
+
+        // Return formatted result
+        return `Month: ${filter.month || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.team || 'Any'} | High priority Production Issues Metrics:
+        ------------------------------------------------------------
+        - Total Issues: ${totalIssues}
+        - On-Time Resolved Issues: ${onTimeIssues}
+        - Average Initial Acknowledgment Time: ${avgAcknowledgmentTime.hours} hours (${avgAcknowledgmentTime.minutes} minutes)
+        - Average Resolution Time: ${avgResolutionTime.hours} hours (${avgResolutionTime.minutes} minutes)
+        `;
+    } catch (error) {
+        console.error(`Error calculating team issue metrics: ${error.message}`);
+        return `An error occurred while processing the data. Please check the logs for more details.`;
     }
-
-    const totalIssues = filteredData.length;
-    const onTimeIssues = filteredData.filter((row) => row['On Time Answer( Yes / No)']?.toLowerCase() === 'yes').length;
-
-    let totalAcknowledgmentTime = 0;
-    let totalResolutionTime = 0;
-    let acknowledgmentCount = 0;
-    let resolutionCount = 0;
-
-    filteredData.forEach((row) => {
-        const reportedTime = parseExcelDate(row['Reported Time']);
-        const acknowledgmentTime = parseExcelDate(row['Initial Acknowledgment Time']);
-        const resolutionTime = parseExcelDate(row['Resolution Time']); // Ensure this is parsed correctly
-
-        // Calculate acknowledgment time (in hours)
-        if (reportedTime && acknowledgmentTime) {
-            const acknowledgmentDiffMillis = acknowledgmentTime - reportedTime;
-            const acknowledgmentDiffHours = acknowledgmentDiffMillis / 3600000; // Difference in hours
-            totalAcknowledgmentTime += acknowledgmentDiffHours;
-            acknowledgmentCount++;
-        }
-
-        // Calculate resolution time (in hours)
-        if (reportedTime && resolutionTime) {
-            const resolutionDiffMillis = resolutionTime - reportedTime;
-            const resolutionDiffHours = resolutionDiffMillis / 3600000; // Difference in hours
-            totalResolutionTime += resolutionDiffHours;
-            resolutionCount++;
-        }
-    });
-
-    // Compute averages
-    const avgAcknowledgmentTimeHours = acknowledgmentCount > 0 ? (totalAcknowledgmentTime / acknowledgmentCount).toFixed(2) : 'N/A';
-    const avgAcknowledgmentTimeMinutes = acknowledgmentCount > 0 ? ((totalAcknowledgmentTime / acknowledgmentCount) * 60).toFixed(2) : 'N/A';
-    const avgResolutionTime = resolutionCount > 0 ? (totalResolutionTime / resolutionCount).toFixed(2) : 'N/A';
-    const avgResolutionTimeMinutes = resolutionCount > 0 ? ((totalResolutionTime / resolutionCount) * 60).toFixed(2) : 'N/A';
-
-
-    return `
-    High priority Production issues Metrics for ${filter.month || 'Overall'} | Team: ${filter.team || 'All'}:
-    ------------------------------------------------------------
-    - Total Issues: ${totalIssues}
-    - On-Time Resolved Issues: ${onTimeIssues}
-    - Average Initial Acknowledgment Time: ${avgAcknowledgmentTimeHours} hours (${avgAcknowledgmentTimeMinutes} minutes)
-    - Average Resolution Time: ${avgResolutionTime} hours (${avgResolutionTimeMinutes} minutes)
-    `;
 }
 
+const project = "Syngenta Planting"
 
-//Inputs
-// Get the current month name
-function getCurrentMonth() {
-    const monthNames = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return monthNames[new Date().getMonth()];
-}
-
-function createFilter(options = {}) {
-    const { month = getCurrentMonth() , person, team } = options;
-    return {
-        month,
-        person,
-        team
-    };
-}
-
-// Centralized function to calculate metrics for a person and month
 function calculateMetrics(persons, filterOptions) {
-    const defaultFilter = createFilter(filterOptions);
+    const defaultFilter = { month: filterOptions.month };
 
     persons.forEach((person) => {
-        const deliveryQuality = calculateDeliveryQuality({ ...defaultFilter, person });
-        console.log(`Delivery Quality || `, deliveryQuality);
-
-        const onTimeDelivery = calculateOnTimeDelivery({ ...defaultFilter, person });
-        console.log(`On-Time Delivery || `, onTimeDelivery);
+        console.log(calculateDeliveryQuality({ ...defaultFilter, person }));
+        console.log(calculateOnTimeDelivery({ ...defaultFilter, person }));
     });
 
-    const averageCoverage = calculateAverageCodeCoverage({ ...defaultFilter, projectName: "Flowtribe" });
-    console.log('Average Code Coverage || ', averageCoverage);
-
-    const prodIssueMetrics = calculateTeamIssueMetrics({ ...defaultFilter, team: "Flowtribe" });
-    console.log('Production Issue Metrics || ', prodIssueMetrics);
+    console.log(calculateAverageCodeCoverage({ ...defaultFilter, projectName: project }));
+    console.log(calculateTeamIssueMetrics({ ...defaultFilter, team: project }))
 }
 
-// const persons = ['Manish', 'Yuvraj', 'Gungun'];
+const persons = ['Manish', 'Yuvraj', 'Gungun'];
 
-const persons = [
-    'Devansh Kaneriya',
-    'Priya Lakhani',
-    'Arjun Parmar',
-    'Nidhi Kathrotiya',
-    'Ronak Jagani',
-    'Sagar Dhanwani',
-    'Siddh Kothari',
-    'Keval Mehta',
-    'Mayank Parmar',
-    'Vishal Parmar',
-    'Ashish Chandpa',
-    'Riya Sata',
-    'Maurya Valambhiya',
-    'Dhruva Pambhar',
-    'Megha Rana',
-    'Rishit Rajpara',
-    'Nirali Sakdecha',
-    'Riddhi Parmar',
-    'Sagar Nakum'
-];
+// const persons = [
+//     'Devansh Kaneriya',
+//     'Priya Lakhani',
+//     'Arjun Parmar',
+//     'Nidhi Kathrotiya',
+//     'Ronak Jagani',
+//     'Sagar Dhanwani',
+//     'Siddh Kothari',
+//     'Keval Mehta',
+//     'Mayank Parmar',
+//     'Vishal Parmar',
+//     'Ashish Chandpa',
+//     'Riya Sata',
+//     'Maurya Valambhiya',
+//     'Dhruva Pambhar',
+//     'Megha Rana',
+//     'Rishit Rajpara',
+//     'Nirali Sakdecha',
+//     'Riddhi Parmar',
+//     'Sagar Nakum'
+// ];
+
+// const persons = ["Misri Pandya"]
 const filterOptions = { month: 'November' };
-
-
 calculateMetrics(persons, filterOptions);
