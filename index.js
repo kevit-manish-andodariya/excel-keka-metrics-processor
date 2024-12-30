@@ -30,6 +30,11 @@ function parseExcelDate(value) {
     return null;
 }
 
+function formatExcelDate(excelDate) {
+    const date = new Date((excelDate - 25569) * 86400000);
+    return date.toLocaleString();
+}
+
 function noDataMessage(filter, dataFor) {
     return `Month: ${filter.month || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | Data for ${dataFor} : N/A.`;
 }
@@ -58,17 +63,23 @@ function calculateDeliveryQuality(filter) {
 
         console.log(`Entries considered: ${filteredData.length} for ${filter.quarter} | ${filter.person}`)
 
-        const { totalTestCases, totalPassedTests } = filteredData.reduce(
+        const {totalTestCases, totalPassedTests} = filteredData.reduce(
             (acc, entry) => {
                 acc.totalTestCases += entry['Total Test Cases'] || 0;
                 acc.totalPassedTests += entry['Tests Passed'] || 0;
                 return acc;
             },
-            { totalTestCases: 0, totalPassedTests: 0 }
+            {totalTestCases: 0, totalPassedTests: 0}
         );
 
         const percentage = totalTestCases > 0 ? ((totalPassedTests / totalTestCases) * 100).toFixed(2) : 0;
-        return `Quarter: ${filter.quarter || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | Delivery Quality Percentage: ${percentage}%.`;
+        return {
+            count: filteredData.length,
+            Quarter: filter.quarter,
+            filteredData,
+            metrics: `${percentage}%`,
+            message: `Quarter: ${filter.quarter || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | Delivery Quality Percentage: ${percentage}%.`
+        }
     } catch (error) {
         console.error('Error in calculateDeliveryQuality:', error.message);
         return 'An error occurred while calculating Delivery Quality.';
@@ -92,25 +103,27 @@ function calculateOnTimeDelivery(filter) {
 
         console.log(`Entries considered: ${filteredData.length} for ${filter.quarter} | ${filter.person}`)
 
-        const { totalDeliveries, onTimeDeliveries } = filteredData.reduce(
+        const {totalDeliveries, onTimeDeliveries} = filteredData.reduce(
             (acc, entry) => {
                 acc.totalDeliveries++;
                 const scheduledDate = parseExcelDate(entry['Scheduled Delivery Date']);
                 const actualDate = parseExcelDate(entry['Actual Delivery Date']);
-                console.log({isOnTime: actualDate <= scheduledDate, scheduledDate, actualDate, entry
-            })
                 if (scheduledDate && actualDate && (actualDate <= scheduledDate)) {
                     acc.onTimeDeliveries++;
                 }
                 return acc;
             },
-            { totalDeliveries: 0, onTimeDeliveries: 0 }
+            {totalDeliveries: 0, onTimeDeliveries: 0}
         );
 
-        console.log({totalDeliveries, onTimeDeliveries})
-
         const percentage = totalDeliveries > 0 ? ((onTimeDeliveries / totalDeliveries) * 100).toFixed(2) : 0;
-        return `Quarter: ${filter.quarter || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | On-Time Delivery Percentage: ${percentage}%.`;
+        return {
+            count: filteredData.length,
+            Quarter: filter.quarter,
+            filteredData,
+            metrics: `${percentage}%`,
+            message: `Quarter: ${filter.quarter || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | On-Time Delivery Percentage: ${percentage}%.`
+        };
     } catch (error) {
         console.error('Error in calculateOnTimeDelivery:', error.message);
         return 'An error occurred while calculating On-Time Delivery.';
@@ -133,7 +146,7 @@ function calculateAverageCodeCoverage(filter) {
 
         console.log(`Entries considered: ${filteredData.length} for ${filter.quarter} | ${filter.projectName}`)
 
-        const { totalCoverage, count } = filteredData.reduce(
+        const {totalCoverage, count} = filteredData.reduce(
             (acc, entry) => {
                 const coverage = entry['Code Coverage'];
                 if (coverage !== 'N/A' && !isNaN(coverage)) {
@@ -142,11 +155,17 @@ function calculateAverageCodeCoverage(filter) {
                 }
                 return acc;
             },
-            { totalCoverage: 0, count: 0 }
+            {totalCoverage: 0, count: 0}
         );
 
         const averageCoverage = count > 0 ? (totalCoverage / count).toFixed(2) : 0;
-        return `Quarter: ${filter.quarter || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | Average Code Coverage: ${averageCoverage}%.`;
+        return {
+            count: filteredData.length,
+            Quarter: filter.quarter,
+            filteredData,
+            metrics: `${averageCoverage}%`,
+            message: `Quarter: ${filter.quarter || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.projectName || 'Any'} | Average Code Coverage: ${averageCoverage}%.`
+        };
     } catch (error) {
         console.error('Error in calculateAverageCodeCoverage:', error.message);
         return 'An error occurred while calculating Code Coverage.';
@@ -175,7 +194,7 @@ function calculateTeamIssueMetrics(filter) {
         // Helper: Filter data based on quarter and team
         const filteredData = data.filter((row) => {
             const reportedDate = parseExcelDate(row['Reported Time']);
-            const month = reportedDate ? reportedDate.toLocaleString('en-US', { month: 'long' }).toLowerCase() : null;
+            const month = reportedDate ? reportedDate.toLocaleString('en-US', {month: 'long'}).toLowerCase() : null;
             const matchesQuarter = filter.quarter ? quarterMonths[filter.quarter].includes(month) : true;
             const matchesTeam = filter.team ? row['Team Name']?.toLowerCase() === filter.team.toLowerCase() : true;
             return matchesQuarter && matchesTeam && reportedDate; // Exclude invalid rows
@@ -207,7 +226,7 @@ function calculateTeamIssueMetrics(filter) {
             const averageTimeHours = count > 0 ? (totalTime / count).toFixed(2) : 'N/A';
             const averageTimeMinutes = count > 0 ? ((totalTime / count) * 60).toFixed(2) : 'N/A';
 
-            return { hours: averageTimeHours, minutes: averageTimeMinutes };
+            return {hours: averageTimeHours, minutes: averageTimeMinutes};
         };
 
         // Metrics calculation
@@ -216,35 +235,87 @@ function calculateTeamIssueMetrics(filter) {
         const avgResolutionTime = calculateAverageTime('Reported Time', 'Resolution Time');
 
         // Return formatted result
-        return `Quarter: ${filter.quarter || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.team || 'Any'} | High priority Production Issues Metrics:
+        return {
+            count: filteredData.length,
+            Quarter: filter.quarter,
+            filteredData,
+            metrics: `${avgAcknowledgmentTime.hours} hours (${avgAcknowledgmentTime.minutes} minutes)`,
+            message: `Quarter: ${filter.quarter || 'Overall'} | Person: ${filter.person || 'Any'} | Project: ${filter.team || 'Any'} | High priority Production Issues Metrics:
         ------------------------------------------------------------
         - Total Issues: ${totalIssues}
         - On-Time Resolved Issues: ${onTimeIssues}
         - Average Initial Acknowledgment Time: ${avgAcknowledgmentTime.hours} hours (${avgAcknowledgmentTime.minutes} minutes)
         - Average Resolution Time: ${avgResolutionTime.hours} hours (${avgResolutionTime.minutes} minutes)
-        `;
+        `
+        }
     } catch (error) {
         console.error(`Error calculating team issue metrics: ${error.message}`);
         return `An error occurred while processing the data. Please check the logs for more details.`;
     }
 }
 
-const project = ["Syngenta Planting"];
+const project = ["TRAD"];
+
+const fs = require('fs');
+
+function writeResultsToFile(results, fileName) {
+    try {
+        fs.writeFileSync(fileName, JSON.stringify(results, null, 2));
+        console.log(`Results written to ${fileName}`);
+    } catch (error) {
+        console.error(`Error writing results to file: ${fileName}`, error.message);
+    }
+}
 
 function calculateMetrics(persons, filterOptions) {
-    const defaultFilter = { quarter: filterOptions.quarter };
+    const defaultFilter = {quarter: filterOptions.quarter};
+    const results = [];
 
     persons.forEach((person) => {
-        console.log(calculateDeliveryQuality({ ...defaultFilter, person }));
-        console.log(calculateOnTimeDelivery({ ...defaultFilter, person }));
+        const deliveryQuality = calculateDeliveryQuality({...defaultFilter, person});
+        const onTimeDelivery = calculateOnTimeDelivery({...defaultFilter, person});
+        results.push({
+            person,
+            deliveryQuality,
+            onTimeDelivery
+        });
     });
 
     project.forEach(e => {
-        console.log(calculateAverageCodeCoverage({ ...defaultFilter, projectName: e }));
-        console.log(calculateTeamIssueMetrics({ ...defaultFilter, team: e }));
+        const averageCodeCoverage = calculateAverageCodeCoverage({...defaultFilter, projectName: e});
+        const teamIssueMetrics = calculateTeamIssueMetrics({...defaultFilter, team: e});
+        results.push({
+            project: e,
+            averageCodeCoverage,
+            highPriorityProductionIssues: teamIssueMetrics
+        });
     });
+    return results
 }
 
-const persons = ["Gungun Udhani", "Yuvraj Kanakiya", "Manish Andodariya"];
-const filterOptions = { quarter: 'Q4' };
-calculateMetrics(persons, filterOptions);
+// const persons = ["Gungun Udhani", "Yuvraj Kanakiya", "Manish Andodariya"];
+// const persons = [
+//     'Devansh Kaneriya',
+//     'Priya Lakhani',
+//     'Arjun Parmar',
+//     'Nidhi Kathrotiya',
+//     'Ronak Jagani',
+//     'Sagar Dhanwani',
+//     'Siddh Kothari',
+//     'Keval Mehta',
+//     'Mayank Parmar',
+//     'Vishal Parmar',
+//     'Ashish Chandpa',
+//     'Riya Sata',
+//     'Maurya Valambhiya',
+//     'Dhruva Pambhar',
+//     'Megha Rana',
+//     'Rishit Rajpara',
+//     'Nirali Sakdecha',
+//     'Riddhi Parmar',
+//     'Sagar Nakum'
+// ];
+const persons = ["Manish Andodariya", "Misri Pandya", "Siddharth Kanjaria", "Siddharth Singh"];
+const filterOptions = {quarter: 'Q4'};
+const results = calculateMetrics(persons, filterOptions);
+writeResultsToFile(results, path.join(__dirname, 'results.json'));
