@@ -49,7 +49,7 @@ const quarterMonths = {
 function calculateDeliveryQuality(filter) {
     try {
         const filePath = path.join(__dirname, 'DC-1.1 - Delivery Quality.xlsx');
-        const data = readExcel(filePath, 'Sheet1');
+        const data = readExcel(filePath, 'Data');
 
         const filteredData = data.filter((row) => {
             const month = row.Month?.toLowerCase();
@@ -133,7 +133,7 @@ function calculateOnTimeDelivery(filter) {
 function calculateAverageCodeCoverage(filter) {
     try {
         const filePath = path.join(__dirname, 'DC-1.3 - Code Coverage.xlsx');
-        const data = readExcel(filePath, 'Maintaining Coverage');
+        const data = readExcel(filePath, 'Data');
 
         const filteredData = data.filter((row) => {
             const month = row.Month?.toLowerCase();
@@ -174,7 +174,7 @@ function calculateAverageCodeCoverage(filter) {
 
 function calculateTeamIssueMetrics(filter) {
     const filePath = path.join(__dirname, 'DC-3.1 High Priority Production Issues.xlsx'); // Input Excel file
-    const sheetName = 'Data Collection';
+    const sheetName = 'Data';
 
     try {
         const data = readExcel(filePath, sheetName); // Read Excel file
@@ -190,6 +190,7 @@ function calculateTeamIssueMetrics(filter) {
             }
             return null; // Return null if invalid
         };
+        const dataToLog = []
 
         // Helper: Filter data based on quarter and team
         const filteredData = data.filter((row) => {
@@ -197,8 +198,13 @@ function calculateTeamIssueMetrics(filter) {
             const month = reportedDate ? reportedDate.toLocaleString('en-US', {month: 'long'}).toLowerCase() : null;
             const matchesQuarter = filter.quarter ? quarterMonths[filter.quarter].includes(month) : true;
             const matchesTeam = filter.team ? row['Team Name']?.toLowerCase() === filter.team.toLowerCase() : true;
+            if (matchesTeam && !(matchesQuarter && matchesTeam && reportedDate)) {
+                dataToLog.push(row)
+            }
             return matchesQuarter && matchesTeam && reportedDate; // Exclude invalid rows
         });
+
+        console.log({dataToLog, filteredData})
 
         if (filteredData.length === 0) return noDataMessage(filter, "High priority Production Issues");
 
@@ -254,7 +260,7 @@ function calculateTeamIssueMetrics(filter) {
     }
 }
 
-const project = ["TRAD"];
+const project = ["Syngenta Planting"];
 
 const fs = require('fs');
 
@@ -293,7 +299,7 @@ function calculateMetrics(persons, filterOptions) {
     return results
 }
 
-// const persons = ["Gungun Udhani", "Yuvraj Kanakiya", "Manish Andodariya"];
+const persons = ["Gungun Udhani", "Yuvraj Kanakiya", "Manish Andodariya"];
 // const persons = [
 //     'Devansh Kaneriya',
 //     'Priya Lakhani',
@@ -315,7 +321,7 @@ function calculateMetrics(persons, filterOptions) {
 //     'Riddhi Parmar',
 //     'Sagar Nakum'
 // ];
-const persons = ["Manish Andodariya", "Misri Pandya", "Siddharth Kanjaria", "Siddharth Singh"];
+// const persons = ["Manish Andodariya", "Misri Pandya", "Siddharth Kanjaria", "Siddharth Singh"];
 const filterOptions = {quarter: 'Q4'};
 const results = calculateMetrics(persons, filterOptions);
 writeResultsToFile(results, path.join(__dirname, 'results.json'));
