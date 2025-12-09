@@ -48,7 +48,6 @@ const filterOptions = {
 calculateMetrics(persons, filterOptions);
 ```
 
-[![Quality Gate Status](https://sonarq.botprosolutions.com/api/project_badges/measure?project=aicl-python-server&metric=alert_status&token=sqb_92a4aaf330084d9147c075c1de84a712cc5398a0)](https://sonarq.botprosolutions.com/dashboard?id=aicl-python-server)
-
 
 <div align="center">Made with love from India ❤️</div>
+
