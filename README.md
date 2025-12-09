@@ -1,4 +1,6 @@
-﻿# Excel Data Processor
+[![Quality gate](https://sonarq.botprosolutions.com/api/project_badges/quality_gate?project=aicl-python-server&token=sqb_92a4aaf330084d9147c075c1de84a712cc5398a0)](https://sonarq.botprosolutions.com/dashboard?id=aicl-python-server)
+ 
+ # Excel Data Processor
 
 This Node.js script processes data from multiple Excel files to calculate various software delivery metrics.  It's designed to provide insights into delivery quality, on-time delivery rates, code coverage, and team issue resolution times.
 
@@ -50,4 +52,5 @@ calculateMetrics(persons, filterOptions);
 
 
 <div align="center">Made with love from India ❤️</div>
+
 
